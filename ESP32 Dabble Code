@@ -1,0 +1,98 @@
+#define CUSTOM_SETTINGS
+#define INCLUDE_GAMEPAD_MODULE
+#include <DabbleESP32.h> 
+
+// --- Pin Definitions ---
+const int AIN1 = 1;   // Left Motor Forward
+const int AIN2 = 2;   // Left Motor Reverse
+const int BIN1 = 3;   // Right Motor Forward
+const int BIN2 = 4;   // Right Motor Reverse
+const int SERVO_PIN = 5; 
+
+// --- Motor Balancing Calibration ---
+// Motor A scale set to 95% power output to balance drift
+const float MOTOR_A_SCALE = 0.95; 
+
+// --- Servo Microsecond Timing ---
+const uint32_t SERVO_STOP = 1229; 
+const uint32_t SERVO_FWD  = 1638; 
+const uint32_t SERVO_REV  = 819;  
+
+void setup() {
+  Serial.begin(115200);
+  // Set Dabble name to connect to in quotes and make it unique to prevent cross connections
+  Dabble.begin("Connect-Name"); 
+  Serial.println("System online. Balance tuned to 0.95.");
+
+  // Attach Motor Channels
+  ledcAttach(AIN1, 1000, 8);
+  ledcAttach(AIN2, 1000, 8);
+  ledcAttach(BIN1, 1000, 8);
+  ledcAttach(BIN2, 1000, 8);
+
+  // Attach Servo Channel
+  ledcAttach(SERVO_PIN, 50, 14); 
+  ledcWrite(SERVO_PIN, SERVO_STOP);
+}
+
+void loop() {
+  Dabble.processInput();
+
+  // 1. DIGITAL BUTTON TANK STEERING CONTROL
+  if (GamePad.isUpPressed()) {
+    driveMotors(255, 255);   // Both Forward
+  } 
+  else if (GamePad.isDownPressed()) {
+    driveMotors(-255, -255); // Both Backward
+  } 
+  else if (GamePad.isLeftPressed()) {
+    driveMotors(-255, 255);  // Spin Left
+  } 
+  else if (GamePad.isRightPressed()) {
+    driveMotors(255, -255);  // Spin Right
+  } 
+  else {
+    driveMotors(0, 0);       // Stop
+  }
+
+  // 2. HANDLE SERVO CONTROL (Square & Circle)
+  if (GamePad.isSquarePressed()) {
+    ledcWrite(SERVO_PIN, SERVO_FWD); 
+  } 
+  else if (GamePad.isCirclePressed()) {
+    ledcWrite(SERVO_PIN, SERVO_REV); 
+  } 
+  else {
+    ledcWrite(SERVO_PIN, SERVO_STOP); 
+  }
+}
+
+// --- Balanced Motor Processing Control ---
+void driveMotors(int leftSpeed, int rightSpeed) {
+  // Apply the 0.95 scale factor to the Left Motor (A)
+  leftSpeed = leftSpeed * MOTOR_A_SCALE;
+
+  // Process Left Motor (A)
+  if (leftSpeed > 0) {
+    ledcWrite(AIN1, leftSpeed);
+    ledcWrite(AIN2, 0);
+  } else if (leftSpeed < 0) {
+    ledcWrite(AIN1, 0);
+    ledcWrite(AIN2, abs(leftSpeed));
+  } else {
+    ledcWrite(AIN1, 0);
+    ledcWrite(AIN2, 0);
+  }
+
+  // Process Right Motor (B)
+  if (rightSpeed > 0) {
+    ledcWrite(BIN1, rightSpeed);
+    ledcWrite(BIN2, 0);
+  } else if (rightSpeed < 0) {
+    ledcWrite(BIN1, 0);
+    ledcWrite(BIN2, abs(rightSpeed));
+  } else {
+    ledcWrite(BIN1, 0);
+    ledcWrite(BIN2, 0);
+  }
+}
